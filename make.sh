@@ -1,0 +1,1 @@
+gcc -o duckchatclient duckchatclient.c csapp.c -lpthread

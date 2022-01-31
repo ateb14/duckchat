@@ -1,9 +1,36 @@
 #include "csapp.h"
 
+int clientfd;
+char *host, *port, buf[MAXLINE];
+rio_t rio;
+char name[50];
+char prompt[100];
+int cnt = 0;
+
+void Chat_send()
+{
+    // Fputs(prompt, stdout);
+    if (Fgets(buf, MAXLINE, stdin) == NULL){
+        return;
+    }
+    Rio_writen(clientfd, buf, strlen(buf));
+}
+void Chat_receive()
+{
+    //Receive and print message
+    // Fputs("Receiving messages...\n", stdout);
+    Rio_writen(clientfd, "re\n", 3);
+    Rio_readlineb(&rio, buf, MAXLINE);
+    int num = atoi(buf); // Lines received from server
+    while(num--) {
+        Rio_readlineb(&rio, buf, MAXLINE);
+        Fputs(buf, stdout);
+    }
+    usleep(100000);
+}
+
+
 int main(int argc, char **argv){
-    int clientfd;
-    char *host, *port, buf[MAXLINE];
-    rio_t rio;
 
     if(argc != 3){
         fprintf(stderr, "usage: %s <host> <port>\n", argv[0]);
@@ -18,7 +45,7 @@ int main(int argc, char **argv){
         exit(0);
     }
     Rio_readinitb(&rio, clientfd);
-    int cnt = 0;
+
     //init message
     while(Rio_readlineb(&rio, buf, MAXLINE) > 0) {
         Fputs(buf, stdout);
@@ -28,42 +55,29 @@ int main(int argc, char **argv){
     }
 
     // create name
-    char name[50];
     while(Fgets(buf, MAXLINE, stdin)) {
         Rio_writen(clientfd, buf, strlen(buf));
         strcpy(name, buf);
         Rio_readlineb(&rio, buf, MAXLINE);
         Fputs(buf, stdout);
-        if(strcmp(buf,"Named successfully\n") == 0){
+        if(strcmp(buf,"Named successfully\n") == 0){ // Check if succeeded
             name[strlen(name)-1] = 0;
             break;
         }
     }
 
-    //prompt message
-    cnt = 0;
-    while(Rio_readlineb(&rio, buf, MAXLINE) > 0) {
-        Fputs(buf, stdout);
-        cnt++;
-        if (cnt >= 1)
-            break;
+    pid_t child_pid = Fork();
+    if(child_pid) // Main process is used to send message
+    {
+        sprintf(prompt, "%s@duckchat >>> ", name);
+        while(1) Chat_send();
+        Close(clientfd);
+        exit(0);
     }
-    
-    char prompt[100];
-    sprintf(prompt, "%s@duckchat>>>", name);
-    while(1){
-        Fputs(prompt, stdout);
-        if (Fgets(buf, MAXLINE, stdin) == NULL){
-            break;
-        }
-        Rio_writen(clientfd, buf, strlen(buf));
-        Rio_readlineb(&rio, buf, MAXLINE);
-        int num = atoi(buf);
-        while(num--) {
-            Rio_readlineb(&rio, buf, MAXLINE);
-            Fputs(buf, stdout);
-        }
+    else
+    {
+        while(1) Chat_receive();
+        Close(clientfd);
+        exit(0);
     }
-    Close(clientfd);
-    exit(0);
 }

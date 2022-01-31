@@ -154,8 +154,7 @@ int parse(char *buf, char **lines, int pos){
         if(k > 0)
             return k;
         else{
-            lines[0] = nonews;
-            return 1;
+            return 0;
         }
     }
     // undefined command
@@ -298,7 +297,10 @@ void login(int connfd, int pos){
 
     /* interpreter part */
     while(Rio_readlineb(&rio, buf, MAXLINE) != 0){
-        printf("server received %ld bytes from %s: %s", strlen(buf), name, buf);
+        if(strcmp(buf, "re\n")) // If received "re", do not show it in log. 
+        {
+            printf("server received %ld bytes from %s: %s", strlen(buf), name, buf);
+        }
         char **lines = (char **) Malloc(sizeof(char *) * MAXNAME);
         int num = parse(buf, lines, pos);
         char numstring[16] = {0};
@@ -312,11 +314,21 @@ void login(int connfd, int pos){
     }
 }
 
+void BlockSigno(int signo)
+{
+    sigset_t signal_mask;
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, signo);
+    pthread_sigmask(SIG_BLOCK, &signal_mask, NULL);
+}
+
 void *thread(void *vargp){
     int connfd = ((struct information *)vargp)->connfd;
     int pos = ((struct information *)vargp)->pos;
     Pthread_detach(pthread_self());
     Free(vargp);
+    BlockSigno(SIGPIPE);
+
     login(connfd, pos);
     Close(connfd);
     printf("User: TID %ld exited\n", pthread_self());

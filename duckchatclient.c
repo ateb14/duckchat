@@ -4,6 +4,7 @@ int clientfd;
 char *host, *port, buf[MAXLINE];
 rio_t rio;
 char name[50];
+char prompt[100];
 int cnt = 0;
 
 void Chat_send()
@@ -20,12 +21,12 @@ void Chat_receive()
     // Fputs("Receiving messages...\n", stdout);
     Rio_writen(clientfd, "re\n", 3);
     Rio_readlineb(&rio, buf, MAXLINE);
-    int num = atoi(buf); // Lines recceived from server
+    int num = atoi(buf); // Lines received from server
     while(num--) {
         Rio_readlineb(&rio, buf, MAXLINE);
         Fputs(buf, stdout);
     }
-    Sleep(1);
+    usleep(100000);
 }
 
 
@@ -68,7 +69,6 @@ int main(int argc, char **argv){
     pid_t child_pid = Fork();
     if(child_pid) // Main process is used to send message
     {
-        char prompt[100];
         sprintf(prompt, "%s@duckchat >>> ", name);
         while(1) Chat_send();
         Close(clientfd);

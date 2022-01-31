@@ -1,1 +1,1 @@
-gnome-terminal -- ./duckchatclient 101.43.159.153 23333
+./duckchatclient 101.43.159.153 11111

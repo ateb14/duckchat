@@ -1,7 +1,7 @@
 #include "csapp.h"
 #include <time.h>
 #define MAXNAME 50
-#define MAXINF 100
+#define MAXINF 502
 #define FRONT 0
 #define REAR 1
 
@@ -154,8 +154,7 @@ int parse(char *buf, char **lines, int pos){
         if(k > 0)
             return k;
         else{
-            lines[0] = nonews;
-            return 1;
+            return 0;
         }
     }
     // undefined command
@@ -186,7 +185,7 @@ int readsentence(char *start, char *message){
         return -1;
     }
     int j = 0, flag = 0;
-    sentence[len++] = '\n'; //lenghth limit needed
+    sentence[len++] = '\n';
     sentence[len] = 0;
     for(;j<len-1;j++){
         if(sentence[j] != ' '){
@@ -194,8 +193,12 @@ int readsentence(char *start, char *message){
             break;
         }
     }
-    if (flag == 0){
+        if (flag == 0){
         strcpy(message, "Error: empty message\n");
+        return -1;
+    }
+    if (len >= MAXINF){
+        sprintf(message, "Error: the message mustn't be longer than %d bytes(or %d bytes including '\\n')\n", MAXINF-2, MAXINF-1);
         return -1;
     }
     printf("Got sentence of %d bytes: %s", len, sentence);
@@ -208,9 +211,9 @@ void login(int connfd, int pos){
     char buf[MAXLINE];
     rio_t rio;
     Rio_readinitb(&rio, connfd);
-    char *words[4] = {"Hello there! Welcome to duckchat.Here you can chat with others that are online.\n",
+    char *words[4] = {"Hello there! Welcome to duckchat. Here you can chat with others that are online.\n",
     "Now please enter your favorite name to create your temporary account, which will be destroyed after you quit.\n",
-    "Warning: please do use English or other characters that are encoded by ASCII, or it may causes some unexpected errors.\n",
+    "Warning: please do use English or other characters that are encoded by ASCII, or it may causes some unexpected errors.（其实是可以用中文等uniode字符的，至少macos不会把客户端卡掉）\n",
     "Enter your name:\n"};
     int i;
     for(i = 0; i < 4; i++){
@@ -294,7 +297,10 @@ void login(int connfd, int pos){
 
     /* interpreter part */
     while(Rio_readlineb(&rio, buf, MAXLINE) != 0){
-        printf("server received %ld bytes from %s: %s", strlen(buf), name, buf);
+        if(strcmp(buf, "re\n")) // If received "re", do not show it in log. 
+        {
+            printf("server received %ld bytes from %s: %s", strlen(buf), name, buf);
+        }
         char **lines = (char **) Malloc(sizeof(char *) * MAXNAME);
         int num = parse(buf, lines, pos);
         char numstring[16] = {0};
@@ -308,11 +314,21 @@ void login(int connfd, int pos){
     }
 }
 
+void BlockSigno(int signo)
+{
+    sigset_t signal_mask;
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, signo);
+    pthread_sigmask(SIG_BLOCK, &signal_mask, NULL);
+}
+
 void *thread(void *vargp){
     int connfd = ((struct information *)vargp)->connfd;
     int pos = ((struct information *)vargp)->pos;
     Pthread_detach(pthread_self());
     Free(vargp);
+    BlockSigno(SIGPIPE);
+
     login(connfd, pos);
     Close(connfd);
     printf("User: TID %ld exited\n", pthread_self());
@@ -350,11 +366,14 @@ int main(int argc, char **argv){
         clientlen = sizeof(struct sockaddr_storage);
         inf = Malloc(sizeof(struct information));
         inf->connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+
+        P(&mutex);
         inf->pos = i;
+        i++;
+        V(&mutex);
 
         Getnameinfo((SA *)&clientaddr, clientlen, client_hostname, MAXLINE, client_port, MAXLINE, 0);
-        pthread_create(tid+i, NULL, thread, inf);
-        i++;
+        pthread_create(tid+inf->pos, NULL, thread, inf);
 
         char timestr[MAXINF];
         gettime(timestr);
